@@ -7,8 +7,8 @@ BIN = bin/
 
 .PHONY: downloader
 downloader: $(SRC)/clientFTP.c
-	$(CC) $(CFLAGS) -o download $^
+	$(CC) $(CFLAGS) -o bin/download $^
 
 .PHONY: clean
 clean:
-	rm -rf download
+	rm -rf bin/*
