@@ -119,3 +119,9 @@ Closes the control socket and gracefully ends the session with the server.
 - Add support for active mode connections.
 - Implement additional FTP commands such as `LIST` and `CWD`.
 - Enhance error messages for better debugging.
+
+
+## Credits
+
+- Developed as part of the course RCOM in the Informatics and Computer Engineering program at FEUP (Faculty of Engineering, University of Porto).
+
