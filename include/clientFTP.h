@@ -10,6 +10,7 @@
 
 
 
+
 /* FTP Reply codes */
 
 /*  Ready for user */
@@ -57,7 +58,7 @@ typedef enum {
 
 /** 
  * Creates socket and connects
- * Returns -1 on error, socket fd on success
+ * Returns -1 on error, socket descriptor on success
  */
 int socket_create(char* host, int port);
 
@@ -77,8 +78,11 @@ int request_resource(int socket, char* resource);
 
 int get_resource(int controlSocket, int dataSocket, char* filename);
 
-int close_conn(int controlSocket, int dataSocket);
+int close_conn(int controlSocket);
 
+/**
+ * 
+ */
 int send_ftp_command(int sockfd, const char* command);
 
 /**

@@ -1,5 +1,11 @@
 CC = gcc
-CFLAGS = -Wall
+CFLAGS = -Wall -g
+
+DEBUG ?= 0
+
+ifeq ($(DEBUG), 1)
+	CFLAGS += -DDEBUG
+endif
 
 SRC = src/
 INCLUDE = include/

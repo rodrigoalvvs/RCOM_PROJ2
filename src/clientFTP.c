@@ -2,9 +2,13 @@
 
 int socket_create(char *host, int port)
 {
+    // Socket identification
+#ifdef DEBUG
+    printf("Creating socket at %s and port %d", host, port);
+#endif
     int socket_descriptor;
 
-    if ((socket_descriptor = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+    if ((socket_descriptor = socket(PF_INET, SOCK_STREAM, 0)) < 0)
     {
         // Error creating socket
         perror("Couldn't create socket!\n");
@@ -13,18 +17,25 @@ int socket_create(char *host, int port)
 
     // Socket created now connect
     struct sockaddr_in svAddr;
-    uint32_t ip = inet_addr(host);
 
-    bzero(&svAddr, sizeof(svAddr));
+    bzero((char *) &svAddr, sizeof(svAddr));
     svAddr.sin_family = AF_INET;
-    svAddr.sin_addr.s_addr = ip;
+    svAddr.sin_addr.s_addr = inet_addr(host);
     svAddr.sin_port = htons(port);
 
-    if ((connect(socket_descriptor, (struct sockaddr *)&svAddr, sizeof(struct sockaddr_in))) < 0)
+
+#ifdef DEBUG
+    printf("Socket address: %x", ip);
+    printf("Socket port: %x", port);
+#endif
+
+    // Try to establish connection to the host
+    if ((connect(socket_descriptor, (struct sockaddr *)&svAddr, sizeof(svAddr))) < 0)
     {
         perror("Couldn't connect to host!\n");
         return -1;
     }
+
     return socket_descriptor;
 }
 
@@ -32,20 +43,20 @@ int enter_passive_mode(int socket)
 {
     char buffer[MAX_BUFFER];
 
+    // Send PASV command to control socket
     if (send_ftp_command(socket, "PASV\r\n") != 0)
     {
-        printf("Passive mode failed!");
-        exit(-1);
-    }
-
-    // Get response
-
-    if (read_ftp_response(socket, buffer) != SERVER_PASSIVE)
-    {
-        printf("Couldn't get passive socket ip!\n");
+        perror("Passive mode failed!");
         return -1;
     }
-    printf("RECEIVED IP %s", buffer);
+
+    // Check if server responds with Server passive
+    if (read_ftp_response(socket, buffer) != SERVER_PASSIVE)
+    {
+        perror("Couldn't get passive socket ip!\n");
+        return -1;
+    }
+
     char *last = strchr(buffer, ')') + 1;
     *last = '\0';
 
@@ -61,7 +72,10 @@ int enter_passive_mode(int socket)
     sprintf(ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
     int port = port1 * 256 + port2;
 
-    printf("Passive socket ip: %s\n", ip);
+#ifdef DEBUG
+    printf("Passive socket info:\t IP %s\t PORT %d\n", ip, port);
+#endif
+
     int dataSocket = socket_create(ip, port);
     if (dataSocket < 0)
     {
@@ -70,7 +84,6 @@ int enter_passive_mode(int socket)
     }
 
     printf("Entered passive mode successfully!\n");
-
     return dataSocket;
 }
 
@@ -86,7 +99,7 @@ int parse(char *input, struct URL *url)
     }
     else
     {
-        printf("Invalid FTP URL\n");
+        perror("Invalid FTP URL\n");
         return -1;
     }
 
@@ -146,7 +159,7 @@ int parse(char *input, struct URL *url)
     struct hostent *he = gethostbyname(url->host);
     if (he == NULL)
     {
-        printf("Couldn't resolve hostname!\n");
+        perror("Couldn't resolve hostname!\n");
         return -1;
     }
 
@@ -160,16 +173,19 @@ int send_ftp_command(int sockfd, const char *command)
 {
     if (command == NULL || strlen(command) == 0)
     {
-        fprintf(stderr, "Error: Command cannot be empty\n");
+        printf("Error: Command cannot be empty\n");
         return -1;
     }
+#ifdef DEBUG
     printf("SENDING COMMAND: %s\n", command);
+#endif
+
     // Send the command to the FTP server
     int n = write(sockfd, command, strlen(command));
     if (n < 0)
     {
         perror("Error: Failed to write to socket");
-        exit(1);
+        return -1;
     }
 
     return 0;
@@ -178,6 +194,7 @@ int send_ftp_command(int sockfd, const char *command)
 int read_ftp_response(int sockfd, char *buffer)
 {
     // Read byte by byte to check
+
     char byte;
     int index = 0;
     memset(buffer, 0, MAX_BUFFER);
@@ -192,7 +209,10 @@ int read_ftp_response(int sockfd, char *buffer)
         if (byte == '\n')
         {
             // end of line (check if line is of type 000 content)
+#ifdef DEBUG
+
             printf("LINE %s\n", buffer);
+#endif
             index = 0;
 
             if (strchr(buffer, ' ') == &buffer[3])
@@ -211,8 +231,9 @@ int get_code_response(const char *buffer)
     if (buffer == NULL || strlen(buffer) < 3)
     {
         perror("Invalid response from server!");
-        exit(-1);
+        return -1;
     }
+
     char code_str[4];
     strncpy(code_str, buffer, 3);
     code_str[3] = '\0';
@@ -236,9 +257,10 @@ int server_login(int socket, char *user, char *password)
     {
         return -1;
     }
-    
+
     int response = read_ftp_response(socket, buffer);
-    if(response == SERVER_LOGGED) return 0;
+    if (response == SERVER_LOGGED)
+        return 0;
 
     if (response != SERVER_SENDPASSWORD)
     {
@@ -266,11 +288,10 @@ int server_login(int socket, char *user, char *password)
 
 int request_resource(int socket, char *resource)
 {
-    printf("REQUESTING RESOURCE!\n");
+    printf("Requesting resource: %s!\n", resource);
 
     char buffer[MAX_BUFFER];
-
-    char retrieve_cmd[5 + strlen(resource) + 1];
+    char retrieve_cmd[5 + strlen(resource) + 2];
     sprintf(retrieve_cmd, "retr %s\r\n", resource);
 
     if (send_ftp_command(socket, retrieve_cmd) != 0)
@@ -304,7 +325,7 @@ int get_resource(int controlSocket, int dataSocket, char *filename)
     char buffer[MAX_BUFFER];
     int bytes;
 
-    printf("Transfering file!\n");
+    printf("Transfering file: %s!\n", filename);
 
     while ((bytes = read(dataSocket, buffer, sizeof(buffer))) > 0)
     {
@@ -319,8 +340,14 @@ int get_resource(int controlSocket, int dataSocket, char *filename)
     }
 
     fclose(file);
+    if (close(dataSocket) != 0)
+    {
+        printf("Error closing passive socket!\n");
+        return -1;
+    }
 
-    if(read_ftp_response(controlSocket, buffer) != SERVER_CLOSING_ON_SUCCESS){
+    if (read_ftp_response(controlSocket, buffer) != SERVER_CLOSING_ON_SUCCESS)
+    {
         return -1;
     }
 
@@ -328,11 +355,11 @@ int get_resource(int controlSocket, int dataSocket, char *filename)
     return 0;
 }
 
-int close_conn(int controlSocket, int dataSocket)
+int close_conn(int controlSocket)
 {
     char buf[MAX_BUFFER];
-    
-    if (write(controlSocket, "QUIT\r\n", 6) < 0)
+
+    if (send_ftp_command(controlSocket, "QUIT\r\n") < 0)
     {
         perror("Error sending QUIT command");
         return -1;
@@ -341,7 +368,7 @@ int close_conn(int controlSocket, int dataSocket)
     if (read_ftp_response(controlSocket, buf) != SERVER_CLOSING)
         return -1;
 
-    return close(controlSocket) || close(dataSocket);
+    return close(controlSocket);
 }
 
 int main(int argc, char *argv[])
@@ -362,7 +389,9 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
+#ifdef DEBUG
     printf("Host: %s\nResource: %s\nFile: %s\nUser: %s\nPassword: %s\nIP Address: %s\n", url.host, url.resource, url.file, url.user, url.password, url.ip);
+#endif
 
     int controlSocket = socket_create(url.ip, FTP_PORT);
     if (controlSocket < 0)
@@ -373,6 +402,7 @@ int main(int argc, char *argv[])
 
     if (server_login(controlSocket, url.user, url.password) < 0)
     {
+        close(controlSocket);
         exit(-1);
     }
 
@@ -380,25 +410,31 @@ int main(int argc, char *argv[])
     if ((dataSocket = enter_passive_mode(controlSocket)) < 0)
     {
         printf("Error on passive mode!\n");
+        close_conn(controlSocket);
         exit(-1);
     }
 
     if (request_resource(controlSocket, url.resource) < 0)
     {
         printf("Error on requesting resource!\n");
+        close(dataSocket);
+        close_conn(controlSocket);
         exit(-1);
     }
 
     if (get_resource(controlSocket, dataSocket, url.file) != 0)
     {
         printf("Error transfering file '%s' from '%s:%d'\n", url.file, url.ip, FTP_PORT);
+        close(dataSocket);
+        close_conn(controlSocket);
         exit(-1);
     }
 
-    if (close_conn(controlSocket, dataSocket) != 0)
+    if (close_conn(controlSocket) != 0)
     {
         printf("Sockets close error!\n");
         exit(-1);
     }
+    
     return 0;
 }
