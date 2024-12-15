@@ -13,6 +13,7 @@ BIN = bin/
 
 .PHONY: downloader
 downloader: $(SRC)/clientFTP.c
+	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) -o bin/download $^
 
 .PHONY: clean
